@@ -1,0 +1,52 @@
+# This workflow will do a clean install of node dependencies, build the source code and 
+# build npm and deploy to firebase hosting
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
+# used code from this link: https://hackernoon.com/how-to-deploy-multiple-sites-to-firebase-using-github-actions-pa2c3wmr
+
+name: build and deploy to firebase 
+
+# workflow_dispatch enables invoking the workflow manually
+# to deploy automatically on push and pull_request to master branch, uncomment lines below
+on:
+#  push:
+#    branches: [ master ]
+#  pull_request:
+#    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+
+# this will build on ubuntu - can build on windows and macos too
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [12.x, 14.x]
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: npm ci
+# specify working-directory if your source path is not ./
+      working-directory: ./my_source_files
+      run: npm ci
+    - name: npm run build
+      env:
+# CI is set to true by default, when building for production warnings are treated as error, so build will fail, set accordingly
+        CI: false       
+      working-directory: ./my_source_files
+      run: npm run build --if-present
+    - name: firebase deploy
+      working-directory: ./my_source_path
+      if: github.ref == 'refs/heads/master'
+# set the FIREBASE_TOKEN under settings -> secret
+# change project_id to your project
+# change firebase_hosting_site - to the web site you have create on firebase hosting
+      run: |
+        sudo npm install -g firebase-tools --unsafe-perm
+        firebase use project_id --token ${{ secrets.FIREBASE_TOKEN }}
+        firebase deploy --only hosting:firebase-hosting-site --non-interactive --token ${{ secrets.FIREBASE_TOKEN }} -m "RunID ${{ github.run_id }} Commit SHA ${{ github.sha }}"
